@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-transparent">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Timer OBS & StreamDeck</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts dynamiques prédéfinies -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Fira+Code:wght@400;700&family=Inter:wght@400;700;900&family=Montserrat:wght@400;700;900&family=Orbitron:wght@500;800;900&family=Poppins:wght@400;700;900&family=Press+Start+2P&family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* Styles personnalisés pour animations & effets de Glow */
+        body {
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        .glow-effect {
+            text-shadow: var(--glow-offset-x, 0px) var(--glow-offset-y, 0px) var(--glow-blur, 15px) var(--glow-color, rgba(168, 85, 247, 0.8));
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(147, 51, 234, 0.5);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(147, 51, 234, 0.8);
+        }
+
+        /* Masquage de l'UI de contrôle si survol désactivé ou mode overlay strict */
+        .overlay-mode .control-panel,
+        .overlay-mode .control-toggle-btn {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .overlay-mode:hover .control-toggle-btn,
+        .overlay-mode:hover .control-panel-hoverable {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        @keyframes pulse-subtle {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="h-full w-full flex flex-col justify-center items-center font-sans antialiased">
+
+    <!-- OVERLAY CONTENEUR DU TIMER -->
+    <div id="timer-container" class="relative flex flex-col items-center justify-center p-6 rounded-2xl transition-all duration-300 w-full max-w-full">
+        
+        <!-- Barre de progression optionnelle -->
+        <div id="progress-bar-container" class="w-full h-2 bg-gray-800/50 rounded-full mb-4 overflow-hidden hidden transition-all duration-300">
+            <div id="progress-bar" class="h-full bg-purple-500 transition-all duration-200" style="width: 100%;"></div>
+        </div>
+
+        <!-- Libellé/Texte d'accompagnement (Supérieur ou Fin de timer) -->
+        <div id="timer-label" class="text-xl md:text-2xl font-bold tracking-wider mb-2 text-center transition-all duration-300 hidden">
+            BE RIGHT BACK
+        </div>
+
+        <!-- Affichage Principal du Temps -->
+        <div id="timer-display" class="glow-effect font-bold tracking-normal leading-none text-center transition-all duration-150 cursor-pointer">
+            05:00
+        </div>
+    </div>
+
+    <!-- BOUTON DISCRET POUR OUVRIR LE PANNEAU DE CONFIGURATION -->
+    <button id="toggle-panel-btn" class="control-toggle-btn fixed top-4 right-4 z-50 bg-slate-900/80 hover:bg-purple-700 text-white p-3 rounded-full shadow-lg border border-purple-500/30 backdrop-blur-md transition-all duration-300 transform hover:scale-110 focus:outline-none" title="Ouvrir la Configuration (Touche C)">
+        <i class="fa-solid fa-gear text-lg"></i>
+    </button>
+
+    <!-- PANNEAU DE CONFIGURATION & DE CONTRÔLE -->
+    <div id="control-panel" class="control-panel fixed inset-y-0 right-0 z-40 w-full max-w-md bg-slate-950/95 backdrop-blur-xl border-l border-purple-900/40 text-slate-100 shadow-2xl transition-transform duration-300 transform translate-x-full flex flex-col">
+        
+        <!-- Header Panneau -->
+        <div class="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-stopwatch text-purple-400 text-xl"></i>
+                <h2 class="text-lg font-bold tracking-wide text-white">Configuration OBS Timer</h2>
+            </div>
+            <button id="close-panel-btn" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Onglets de navigation -->
+        <div class="flex border-b border-slate-800 bg-slate-900/30 text-xs font-semibold uppercase tracking-wider">
+            <button class="tab-btn active border-b-2 border-purple-500 text-purple-400 flex-1 py-3 px-2 text-center transition" data-tab="tab-control">Contrôle</button>
+            <button class="tab-btn text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex-1 py-3 px-2 text-center transition" data-tab="tab-settings">Temps & Texte</button>
+            <button class="tab-btn text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex-1 py-3 px-2 text-center transition" data-tab="tab-style">Style & Polices</button>
+            <button class="tab-btn text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex-1 py-3 px-2 text-center transition" data-tab="tab-streamdeck">StreamDeck</button>
+        </div>
+
+        <!-- Contenu des Onglets -->
+        <div class="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+
+            <!-- TAB 1: CONTRÔLE -->
+            <div id="tab-control" class="tab-content space-y-5">
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-4">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-purple-400">Commandes Directes</h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btn-start-pause" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-2 rounded-lg transition flex flex-col items-center justify-center space-y-1 shadow-lg shadow-purple-900/30">
+                            <i id="icon-start-pause" class="fa-solid fa-play text-lg"></i>
+                            <span id="text-start-pause" class="text-xs">Start</span>
+                        </button>
+                        <button id="btn-reset" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 px-2 rounded-lg transition flex flex-col items-center justify-center space-y-1 border border-slate-700">
+                            <i class="fa-solid fa-rotate-left text-lg"></i>
+                            <span class="text-xs">Reset</span>
+                        </button>
+                        <button id="btn-toggle-mode" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 px-2 rounded-lg transition flex flex-col items-center justify-center space-y-1 border border-slate-700">
+                            <i class="fa-solid fa-arrows-up-down text-lg"></i>
+                            <span id="text-mode-btn" class="text-xs">Count Down</span>
+                        </button>
+                    </div>
+
+                    <!-- Ajustements rapides (+1m, +5m, -1m, etc.) -->
+                    <div class="pt-2 border-t border-slate-800">
+                        <span class="text-xs text-slate-400 block mb-2 font-medium">Ajustement Rapide du Temps</span>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button class="btn-adjust bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-2 rounded text-xs font-bold border border-slate-700/50" data-seconds="-300">-5m</button>
+                            <button class="btn-adjust bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-2 rounded text-xs font-bold border border-slate-700/50" data-seconds="-60">-1m</button>
+                            <button class="btn-adjust bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-2 rounded text-xs font-bold border border-slate-700/50" data-seconds="60">+1m</button>
+                            <button class="btn-adjust bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-2 rounded text-xs font-bold border border-slate-700/50" data-seconds="300">+5m</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Live Sync -->
+                <div class="bg-slate-900/40 p-4 rounded-xl border border-slate-800 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <span class="relative flex h-3 w-3">
+                            <span id="sync-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                        </span>
+                        <span class="text-xs font-medium text-slate-300">BroadcastChannel Sync Active</span>
+                    </div>
+                    <span id="sync-instances" class="text-xs text-slate-500">Synchro multi-fenêtres</span>
+                </div>
+            </div>
+
+            <!-- TAB 2: TEMPS & TEXTE -->
+            <div id="tab-settings" class="tab-content space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Durée Initiale (Heures : Minutes : Secondes)</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <span class="text-[10px] text-slate-400 block mb-1">Heures</span>
+                            <input type="number" id="input-hours" min="0" max="99" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-center font-mono text-white focus:border-purple-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 block mb-1">Minutes</span>
+                            <input type="number" id="input-minutes" min="0" max="59" value="5" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-center font-mono text-white focus:border-purple-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-slate-400 block mb-1">Secondes</span>
+                            <input type="number" id="input-seconds" min="0" max="59" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-center font-mono text-white focus:border-purple-500 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Format d'affichage du Temps</label>
+                    <select id="select-format" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                        <option value="auto">Automatique (Masque HH si 0)</option>
+                        <option value="hhmmss">HH:MM:SS (Toujours complet)</option>
+                        <option value="mmss">MM:SS (Ignorer Heures)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Texte d'Accompagnement / Subtitle</label>
+                    <input type="text" id="input-subtext" placeholder="ex: LE STREAM COMMENCE BIENTÔT" value="" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Message de Fin (quand le timer arrive à 0)</label>
+                    <input type="text" id="input-end-text" placeholder="ex: C'EST PARTI !" value="C'EST PARTI !" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                </div>
+
+                <div class="pt-2 flex items-center justify-between border-t border-slate-800">
+                    <span class="text-xs font-semibold text-slate-300">Afficher la Barre de Progression</span>
+                    <input type="checkbox" id="check-show-progress" class="w-4 h-4 accent-purple-600 rounded cursor-pointer">
+                </div>
+            </div>
+
+            <!-- TAB 3: STYLE & POLICES -->
+            <div id="tab-style" class="tab-content space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Police Google Fonts</label>
+                    <select id="select-font" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                        <option value="Montserrat">Montserrat (Moderne / Clean)</option>
+                        <option value="Bebas Neue">Bebas Neue (Impact Stream)</option>
+                        <option value="Orbitron">Orbitron (Futuriste / Sci-Fi)</option>
+                        <option value="Press Start 2P">Press Start 2P (Retro Gaming 8-bit)</option>
+                        <option value="Roboto">Roboto (Standard)</option>
+                        <option value="Poppins">Poppins (Arrondi & Moderne)</option>
+                        <option value="Inter">Inter (Ultra Clean)</option>
+                        <option value="Fira Code">Fira Code (Monospace / Tech)</option>
+                        <option value="custom">-- Police Système Custom --</option>
+                    </select>
+                </div>
+
+                <div id="custom-font-container" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nom de Police Personnalisée</label>
+                    <input type="text" id="input-custom-font" placeholder="ex: Arial, Impact, 'Comic Sans MS'" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:border-purple-500 focus:outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Couleur du Texte</label>
+                        <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-lg border border-slate-700">
+                            <input type="color" id="color-text" value="#ffffff" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                            <input type="text" id="color-text-hex" value="#ffffff" class="w-full bg-transparent text-xs text-slate-300 uppercase focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Couleur Glow / Ombre</label>
+                        <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-lg border border-slate-700">
+                            <input type="color" id="color-glow" value="#a855f7" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                            <input type="text" id="color-glow-hex" value="#a855f7" class="w-full bg-transparent text-xs text-slate-300 uppercase focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Fond de Boîte</label>
+                        <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-lg border border-slate-700">
+                            <input type="color" id="color-bg" value="#0f172a" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                            <input type="text" id="color-bg-hex" value="#0f172a" class="w-full bg-transparent text-xs text-slate-300 uppercase focus:outline-none">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Barre Progression</label>
+                        <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-lg border border-slate-700">
+                            <input type="color" id="color-progress" value="#a855f7" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
+                            <input type="text" id="color-progress-hex" value="#a855f7" class="w-full bg-transparent text-xs text-slate-300 uppercase focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Taille du Texte</label>
+                        <span id="val-font-size" class="text-xs text-purple-400 font-mono">72px</span>
+                    </div>
+                    <input type="range" id="range-font-size" min="24" max="180" value="72" class="w-full accent-purple-600 bg-slate-800">
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Intensité Glow (Flou)</label>
+                        <span id="val-glow-blur" class="text-xs text-purple-400 font-mono">15px</span>
+                    </div>
+                    <input type="range" id="range-glow-blur" min="0" max="50" value="15" class="w-full accent-purple-600 bg-slate-800">
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Opacité du Fond</label>
+                        <span id="val-bg-opacity" class="text-xs text-purple-400 font-mono">0%</span>
+                    </div>
+                    <input type="range" id="range-bg-opacity" min="0" max="100" value="0" class="w-full accent-purple-600 bg-slate-800">
+                </div>
+            </div>
+
+            <!-- TAB 4: STREAMDECK & OBS GUIDES -->
+            <div id="tab-streamdeck" class="tab-content space-y-4 hidden">
+                <div class="bg-purple-950/40 p-3 rounded-lg border border-purple-800/40 text-xs text-purple-200">
+                    <i class="fa-solid fa-circle-info mr-1.5 text-purple-400"></i>
+                    Contrôlez ce timer facilement depuis votre Stream Deck via 3 méthodes :
+                </div>
+
+                <!-- Méthode 1: Raccourcis Clavier -->
+                <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <h4 class="text-xs font-bold text-white flex items-center justify-between">
+                        <span>1. Raccourcis Clavier (Hotkeys OBS)</span>
+                        <span class="bg-purple-900/60 text-purple-300 text-[10px] px-2 py-0.5 rounded">Instantané</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-400">Pointez ou cliquez sur le widget dans OBS puis utilisez ces touches :</p>
+                    <ul class="text-[11px] space-y-1 text-slate-300 font-mono bg-slate-950/60 p-2 rounded">
+                        <li><span class="text-purple-400 font-bold">[Espace]</span> : Start / Pause</li>
+                        <li><span class="text-purple-400 font-bold">[R]</span> : Reset</li>
+                        <li><span class="text-purple-400 font-bold">[+] / [-]</span> : +1min / -1min</li>
+                        <li><span class="text-purple-400 font-bold">[C]</span> : Masquer/Affiche le Panneau Config</li>
+                    </ul>
+                </div>
+
+                <!-- Méthode 2: StreamDeck via System Open URL / Web Requests -->
+                <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <h4 class="text-xs font-bold text-white flex items-center justify-between">
+                        <span>2. Commandes URL / StreamDeck Action</span>
+                        <span class="bg-blue-900/60 text-blue-300 text-[10px] px-2 py-0.5 rounded">Recommandé</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-400">Créez une deuxième fenêtre "Contrôleur" ou un OBS Dock, ou utilisez l'action Stream Deck <strong>System: Open URL</strong> ou <strong>Web Requests</strong> :</p>
+                    <div class="space-y-1 text-[11px]">
+                        <div class="flex items-center justify-between bg-slate-950/60 p-1.5 rounded">
+                            <span class="text-slate-300">Action Start/Pause:</span>
+                            <button class="btn-copy-action bg-slate-800 hover:bg-slate-700 text-xs px-2 py-0.5 rounded text-purple-300 font-mono" data-action="toggle">?action=toggle</button>
+                        </div>
+                        <div class="flex items-center justify-between bg-slate-950/60 p-1.5 rounded">
+                            <span class="text-slate-300">Action Reset:</span>
+                            <button class="btn-copy-action bg-slate-800 hover:bg-slate-700 text-xs px-2 py-0.5 rounded text-purple-300 font-mono" data-action="reset">?action=reset</button>
+                        </div>
+                        <div class="flex items-center justify-between bg-slate-950/60 p-1.5 rounded">
+                            <span class="text-slate-300">Ajouter 1 Min:</span>
+                            <button class="btn-copy-action bg-slate-800 hover:bg-slate-700 text-xs px-2 py-0.5 rounded text-purple-300 font-mono" data-action="add60">+60s</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generateur d'URL Directe OBS -->
+                <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <h4 class="text-xs font-bold text-white">Lien pour OBS Browser Source</h4>
+                    <p class="text-[11px] text-slate-400">Copiez cette URL pour l'insérer directement dans la source navigateur de votre scène OBS Studio :</p>
+                    <div class="flex space-x-2">
+                        <input type="text" id="obs-url-input" readonly class="w-full bg-slate-950 border border-slate-700 text-slate-300 text-[11px] font-mono p-2 rounded focus:outline-none select-all">
+                        <button id="btn-copy-obs-url" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-2 rounded font-bold transition">
+                            <i class="fa-solid fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer Panneau / Actions Globales -->
+        <div class="p-4 border-t border-slate-800 bg-slate-900/50 flex space-x-2">
+            <button id="btn-export-json" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 border border-slate-700">
+                <i class="fa-solid fa-download"></i>
+                <span>Exporter JSON</span>
+            </button>
+            <button id="btn-import-json" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1.5 border border-slate-700">
+                <i class="fa-solid fa-upload"></i>
+                <span>Importer</span>
+            </button>
+            <input type="file" id="file-import" accept=".json" class="hidden">
+        </div>
+
+    </div>
+
+    <!-- NOTIFICATION TOAST -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-purple-600 text-white px-4 py-2 rounded-full shadow-xl text-xs font-bold opacity-0 transition-opacity duration-300 pointer-events-none flex items-center space-x-2">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toast-msg">Configuration enregistrée</span>
+    </div>
+
+    <!-- LOGIQUE JAVASCRIPT ULTRA-COMPLETE -->
+    <script>
+        (function() {
+            // --- CONSTANTES & ETAT PAR DEFAUT ---
+            const DEFAULT_SETTINGS = {
+                hours: 0,
+                minutes: 5,
+                seconds: 0,
+                mode: 'countdown', // 'countdown' | 'countup'
+                format: 'auto', // 'auto' | 'hhmmss' | 'mmss'
+                subtext: '',
+                endText: "C'EST PARTI !",
+                showProgress: false,
+                fontFamily: 'Montserrat',
+                customFont: '',
+                textColor: '#ffffff',
+                glowColor: '#a855f7',
+                bgColor: '#0f172a',
+                progressColor: '#a855f7',
+                fontSize: 72,
+                glowBlur: 15,
+                bgOpacity: 0
+            };
+
+            let config = { ...DEFAULT_SETTINGS };
+
+            // État d'exécution du timer
+            let state = {
+                totalSeconds: 300, // Durée initiale cible
+                currentSeconds: 300, // Temps courant en secondes
+                isRunning: false,
+                intervalId: null
+            };
+
+            // Canal de communication multi-fenêtres (BroadcastChannel)
+            const channel = new BroadcastChannel('obs_timer_sync_channel');
+
+            // Elements du DOM
+            const dom = {
+                body: document.body,
+                timerContainer: document.getElementById('timer-container'),
+                timerDisplay: document.getElementById('timer-display'),
+                timerLabel: document.getElementById('timer-label'),
+                progressBarContainer: document.getElementById('progress-bar-container'),
+                progressBar: document.getElementById('progress-bar'),
+                controlPanel: document.getElementById('control-panel'),
+                togglePanelBtn: document.getElementById('toggle-panel-btn'),
+                closePanelBtn: document.getElementById('close-panel-btn'),
+                btnStartPause: document.getElementById('btn-start-pause'),
+                iconStartPause: document.getElementById('icon-start-pause'),
+                textStartPause: document.getElementById('text-start-pause'),
+                btnReset: document.getElementById('btn-reset'),
+                btnToggleMode: document.getElementById('btn-toggle-mode'),
+                textModeBtn: document.getElementById('text-mode-btn'),
+                
+                // Form Inputs
+                inputHours: document.getElementById('input-hours'),
+                inputMinutes: document.getElementById('input-minutes'),
+                inputSeconds: document.getElementById('input-seconds'),
+                selectFormat: document.getElementById('select-format'),
+                inputSubtext: document.getElementById('input-subtext'),
+                inputEndText: document.getElementById('input-end-text'),
+                checkShowProgress: document.getElementById('check-show-progress'),
+                
+                selectFont: document.getElementById('select-font'),
+                customFontContainer: document.getElementById('custom-font-container'),
+                inputCustomFont: document.getElementById('input-custom-font'),
+                
+                colorText: document.getElementById('color-text'),
+                colorTextHex: document.getElementById('color-text-hex'),
+                colorGlow: document.getElementById('color-glow'),
+                colorGlowHex: document.getElementById('color-glow-hex'),
+                colorBg: document.getElementById('color-bg'),
+                colorBgHex: document.getElementById('color-bg-hex'),
+                colorProgress: document.getElementById('color-progress'),
+                colorProgressHex: document.getElementById('color-progress-hex'),
+                
+                rangeFontSize: document.getElementById('range-font-size'),
+                valFontSize: document.getElementById('val-font-size'),
+                rangeGlowBlur: document.getElementById('range-glow-blur'),
+                valGlowBlur: document.getElementById('val-glow-blur'),
+                rangeBgOpacity: document.getElementById('range-bg-opacity'),
+                valBgOpacity: document.getElementById('val-bg-opacity'),
+                
+                obsUrlInput: document.getElementById('obs-url-input'),
+                btnCopyObsUrl: document.getElementById('btn-copy-obs-url'),
+                toast: document.getElementById('toast'),
+                toastMsg: document.getElementById('toast-msg'),
+                
+                btnExportJson: document.getElementById('btn-export-json'),
+                btnImportJson: document.getElementById('btn-import-json'),
+                fileImport: document.getElementById('file-import')
+            };
+
+            // --- INITIALISATION ---
+            function init() {
+                loadSavedConfig();
+                parseUrlParameters();
+                setupEventListeners();
+                setupBroadcastSync();
+                calculateTotalSeconds();
+                resetTimer();
+                applyConfigToUI();
+                render();
+            }
+
+            // --- GESTION DU STORAGE & CONFIG ---
+            function loadSavedConfig() {
+                const saved = localStorage.getItem('obs_timer_config');
+                if (saved) {
+                    try {
+                        config = { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+                    } catch(e) {
+                        console.error('Erreur chargement config LocalStorage', e);
+                    }
+                }
+            }
+
+            function saveConfig() {
+                localStorage.setItem('obs_timer_config', JSON.stringify(config));
+                broadcastState('config_updated', { config });
+            }
+
+            // --- PARSER D'URL POUR STREAMDECK & OBS ---
+            function parseUrlParameters() {
+                const params = new URLSearchParams(window.location.search);
+                
+                // Si l'URL contient une commande directe (Stream Deck Web Request)
+                const action = params.get('action');
+                if (action) {
+                    executeAction(action);
+                }
+
+                // URL Override de visibilité du panneau
+                if (params.get('overlay') === 'true') {
+                    document.body.classList.add('overlay-mode');
+                }
+
+                // Configuration passée via URL si disponible
+                if (params.get('cfg')) {
+                    try {
+                        const decodedCfg = JSON.parse(atob(params.get('cfg')));
+                        config = { ...config, ...decodedCfg };
+                    } catch(e) {
+                        console.error("Erreur de décodage des paramètres d'URL", e);
+                    }
+                }
+            }
+
+            // --- CALCULS DU TIMER ---
+            function calculateTotalSeconds() {
+                const h = parseInt(config.hours, 10) || 0;
+                const m = parseInt(config.minutes, 10) || 0;
+                const s = parseInt(config.seconds, 10) || 0;
+                state.totalSeconds = (h * 3600) + (m * 60) + s;
+                if (state.totalSeconds <= 0 && config.mode === 'countdown') {
+                    state.totalSeconds = 60; // Fallback par défaut 1m
+                }
+            }
+
+            // --- LOGIQUE CORE DU TIMER ---
+            function startTimer() {
+                if (state.isRunning) return;
+                state.isRunning = true;
+                
+                state.intervalId = setInterval(() => {
+                    if (config.mode === 'countdown') {
+                        if (state.currentSeconds > 0) {
+                            state.currentSeconds--;
+                        } else {
+                            pauseTimer();
+                            triggerTimerEnd();
+                        }
+                    } else {
+                        // Countup
+                        state.currentSeconds++;
+                    }
+                    render();
+                    broadcastState('tick', { currentSeconds: state.currentSeconds, isRunning: state.isRunning });
+                }, 1000);
+
+                updateControlButtons();
+                broadcastState('state_change', { isRunning: true });
+            }
+
+            function pauseTimer() {
+                if (!state.isRunning) return;
+                state.isRunning = false;
+                if (state.intervalId) {
+                    clearInterval(state.intervalId);
+                    state.intervalId = null;
+                }
+                updateControlButtons();
+                broadcastState('state_change', { isRunning: false });
+            }
+
+            function toggleTimer() {
+                if (state.isRunning) {
+                    pauseTimer();
+                } else {
+                    startTimer();
+                }
+            }
+
+            function resetTimer() {
+                pauseTimer();
+                calculateTotalSeconds();
+                state.currentSeconds = config.mode === 'countdown' ? state.totalSeconds : 0;
+                dom.timerContainer.classList.remove('animate-pulse-subtle');
+                render();
+                broadcastState('reset', { currentSeconds: state.currentSeconds });
+            }
+
+            function adjustTime(secondsToAdd) {
+                state.currentSeconds = Math.max(0, state.currentSeconds + secondsToAdd);
+                render();
+                broadcastState('tick', { currentSeconds: state.currentSeconds, isRunning: state.isRunning });
+            }
+
+            function triggerTimerEnd() {
+                dom.timerContainer.classList.add('animate-pulse-subtle');
+                render();
+                playBeepSound();
+            }
+
+            // --- EFFET SONORE OPTIONNEL ---
+            function playBeepSound() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(880, ctx.currentTime); // Note A5
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.8);
+                } catch(e) {
+                    // Ignoré si bloqué par les règles navigateur
+                }
+            }
+
+            // --- COMMANDE EXTERNE (STREAM DECK) ---
+            function executeAction(action) {
+                switch(action) {
+                    case 'start': startTimer(); break;
+                    case 'pause': pauseTimer(); break;
+                    case 'toggle': toggleTimer(); break;
+                    case 'reset': resetTimer(); break;
+                    case 'add60': adjustTime(60); break;
+                    case 'sub60': adjustTime(-60); break;
+                }
+            }
+
+            // --- BROADCAST & SYNCHRONISATION MULTI-FENETRES ---
+            function setupBroadcastSync() {
+                channel.onmessage = (event) => {
+                    const { type, data } = event.data;
+                    switch(type) {
+                        case 'state_change':
+                            if (data.isRunning) startTimer(); else pauseTimer();
+                            break;
+                        case 'tick':
+                            state.currentSeconds = data.currentSeconds;
+                            render();
+                            break;
+                        case 'reset':
+                            state.currentSeconds = data.currentSeconds;
+                            pauseTimer();
+                            render();
+                            break;
+                        case 'config_updated':
+                            config = { ...config, ...data.config };
+                            applyConfigToUI();
+                            calculateTotalSeconds();
+                            render();
+                            break;
+                        case 'action':
+                            executeAction(data.action);
+                            break;
+                    }
+                };
+            }
+
+            function broadcastState(type, data = {}) {
+                channel.postMessage({ type, data });
+            }
+
+            // --- RENDU VISUEL ---
+            function render() {
+                // Formatting du Temps
+                dom.timerDisplay.textContent = formatTime(state.currentSeconds);
+
+                // Gestion Subtitle / End Text
+                if (config.mode === 'countdown' && state.currentSeconds === 0) {
+                    dom.timerLabel.textContent = config.endText;
+                    dom.timerLabel.classList.remove('hidden');
+                } else if (config.subtext.trim() !== '') {
+                    dom.timerLabel.textContent = config.subtext;
+                    dom.timerLabel.classList.remove('hidden');
+                } else {
+                    dom.timerLabel.classList.add('hidden');
+                }
+
+                // Barre de progression
+                if (config.showProgress) {
+                    dom.progressBarContainer.classList.remove('hidden');
+                    let pct = 0;
+                    if (config.mode === 'countdown' && state.totalSeconds > 0) {
+                        pct = (state.currentSeconds / state.totalSeconds) * 100;
+                    } else if (config.mode === 'countup') {
+                        pct = Math.min(100, (state.currentSeconds / (state.totalSeconds || 300)) * 100);
+                    }
+                    dom.progressBar.style.width = `${pct}%`;
+                } else {
+                    dom.progressBarContainer.classList.add('hidden');
+                }
+            }
+
+            function formatTime(totalSec) {
+                const h = Math.floor(totalSec / 3600);
+                const m = Math.floor((totalSec % 3600) / 60);
+                const s = totalSec % 60;
+
+                const pad = (num) => String(num).padStart(2, '0');
+
+                if (config.format === 'hhmmss') {
+                    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+                } else if (config.format === 'mmss') {
+                    return `${pad(m)}:${pad(s)}`;
+                } else {
+                    // Auto
+                    if (h > 0) {
+                        return `${pad(h)}:${pad(m)}:${pad(s)}`;
+                    } else {
+                        return `${pad(m)}:${pad(s)}`;
+                    }
+                }
+            }
+
+            // --- APPLICATION DU STYLE & UI CONFIG ---
+            function applyStyles() {
+                // Polices
+                let selectedFont = config.fontFamily;
+                if (selectedFont === 'custom' && config.customFont.trim() !== '') {
+                    selectedFont = config.customFont;
+                }
+                dom.timerDisplay.style.fontFamily = `"${selectedFont}", sans-serif`;
+                dom.timerLabel.style.fontFamily = `"${selectedFont}", sans-serif`;
+
+                // Tailles
+                dom.timerDisplay.style.fontSize = `${config.fontSize}px`;
+
+                // Couleurs & Glow
+                dom.timerDisplay.style.color = config.textColor;
+                dom.timerLabel.style.color = config.textColor;
+
+                // Glow (CSS Custom Props)
+                dom.timerDisplay.style.setProperty('--glow-color', config.glowColor);
+                dom.timerDisplay.style.setProperty('--glow-blur', `${config.glowBlur}px`);
+
+                // Barre de Progression
+                dom.progressBar.style.backgroundColor = config.progressColor;
+
+                // Fond
+                const opacity = config.bgOpacity / 100;
+                const rgbBg = hexToRgb(config.bgColor);
+                if (rgbBg) {
+                    dom.timerContainer.style.backgroundColor = `rgba(${rgbBg.r}, ${rgbBg.g}, ${rgbBg.b}, ${opacity})`;
+                }
+
+                // Générer URL OBS Mise à jour
+                updateObsUrlPreview();
+            }
+
+            function hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : null;
+            }
+
+            function applyConfigToUI() {
+                dom.inputHours.value = config.hours;
+                dom.inputMinutes.value = config.minutes;
+                dom.inputSeconds.value = config.seconds;
+                dom.selectFormat.value = config.format;
+                dom.inputSubtext.value = config.subtext;
+                dom.inputEndText.value = config.endText;
+                dom.checkShowProgress.checked = config.showProgress;
+
+                dom.selectFont.value = config.fontFamily;
+                if (config.fontFamily === 'custom') {
+                    dom.customFontContainer.classList.remove('hidden');
+                } else {
+                    dom.customFontContainer.classList.add('hidden');
+                }
+                dom.inputCustomFont.value = config.customFont;
+
+                dom.colorText.value = config.textColor;
+                dom.colorTextHex.value = config.textColor;
+                dom.colorGlow.value = config.glowColor;
+                dom.colorGlowHex.value = config.glowColor;
+                dom.colorBg.value = config.bgColor;
+                dom.colorBgHex.value = config.bgColor;
+                dom.colorProgress.value = config.progressColor;
+                dom.colorProgressHex.value = config.progressColor;
+
+                dom.rangeFontSize.value = config.fontSize;
+                dom.valFontSize.textContent = `${config.fontSize}px`;
+                dom.rangeGlowBlur.value = config.glowBlur;
+                dom.valGlowBlur.textContent = `${config.glowBlur}px`;
+                dom.rangeBgOpacity.value = config.bgOpacity;
+                dom.valBgOpacity.textContent = `${config.bgOpacity}%`;
+
+                dom.textModeBtn.textContent = config.mode === 'countdown' ? 'Count Down' : 'Count Up';
+
+                applyStyles();
+            }
+
+            function updateControlButtons() {
+                if (state.isRunning) {
+                    dom.iconStartPause.className = 'fa-solid fa-pause text-lg';
+                    dom.textStartPause.textContent = 'Pause';
+                    dom.btnStartPause.classList.remove('bg-purple-600', 'hover:bg-purple-500');
+                    dom.btnStartPause.classList.add('bg-amber-600', 'hover:bg-amber-500');
+                } else {
+                    dom.iconStartPause.className = 'fa-solid fa-play text-lg';
+                    dom.textStartPause.textContent = 'Start';
+                    dom.btnStartPause.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+                    dom.btnStartPause.classList.add('bg-purple-600', 'hover:bg-purple-500');
+                }
+            }
+
+            function updateObsUrlPreview() {
+                const baseUrl = window.location.origin + window.location.pathname;
+                const encodedCfg = btoa(JSON.stringify(config));
+                dom.obsUrlInput.value = `${baseUrl}?overlay=true&cfg=${encodedCfg}`;
+            }
+
+            function showToast(msg) {
+                dom.toastMsg.textContent = msg;
+                dom.toast.classList.remove('opacity-0');
+                setTimeout(() => {
+                    dom.toast.classList.add('opacity-0');
+                }, 2000);
+            }
+
+            // --- EVENT LISTENERS ---
+            function setupEventListeners() {
+                // Toggle Panel
+                dom.togglePanelBtn.addEventListener('click', () => {
+                    dom.controlPanel.classList.toggle('translate-x-full');
+                });
+                dom.closePanelBtn.addEventListener('click', () => {
+                    dom.controlPanel.classList.add('translate-x-full');
+                });
+
+                // Clic direct sur le timer pour Start/Pause
+                dom.timerDisplay.addEventListener('click', toggleTimer);
+
+                // Onglets Nav
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.tab-btn').forEach(b => {
+                            b.classList.remove('active', 'border-purple-500', 'text-purple-400');
+                            b.classList.add('border-transparent', 'text-slate-400');
+                        });
+                        e.target.classList.add('active', 'border-purple-500', 'text-purple-400');
+                        e.target.classList.remove('border-transparent', 'text-slate-400');
+
+                        const targetTab = e.target.getAttribute('data-tab');
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                        document.getElementById(targetTab).classList.remove('hidden');
+                    });
+                });
+
+                // Control Buttons
+                dom.btnStartPause.addEventListener('click', toggleTimer);
+                dom.btnReset.addEventListener('click', resetTimer);
+                dom.btnToggleMode.addEventListener('click', () => {
+                    config.mode = config.mode === 'countdown' ? 'countup' : 'countdown';
+                    dom.textModeBtn.textContent = config.mode === 'countdown' ? 'Count Down' : 'Count Up';
+                    saveConfig();
+                    resetTimer();
+                });
+
+                // Ajustements Rapides
+                document.querySelectorAll('.btn-adjust').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const sec = parseInt(e.target.getAttribute('data-seconds'), 10);
+                        adjustTime(sec);
+                    });
+                });
+
+                // Synchronisation des Form Inputs -> Config
+                const updateField = (key, val) => {
+                    config[key] = val;
+                    saveConfig();
+                    applyStyles();
+                    if (['hours', 'minutes', 'seconds'].includes(key)) {
+                        calculateTotalSeconds();
+                        if (!state.isRunning) resetTimer();
+                    } else {
+                        render();
+                    }
+                };
+
+                dom.inputHours.addEventListener('input', (e) => updateField('hours', e.target.value));
+                dom.inputMinutes.addEventListener('input', (e) => updateField('minutes', e.target.value));
+                dom.inputSeconds.addEventListener('input', (e) => updateField('seconds', e.target.value));
+                dom.selectFormat.addEventListener('change', (e) => updateField('format', e.target.value));
+                dom.inputSubtext.addEventListener('input', (e) => updateField('subtext', e.target.value));
+                dom.inputEndText.addEventListener('input', (e) => updateField('endText', e.target.value));
+                dom.checkShowProgress.addEventListener('change', (e) => updateField('showProgress', e.target.checked));
+
+                // Font Events
+                dom.selectFont.addEventListener('change', (e) => {
+                    if (e.target.value === 'custom') {
+                        dom.customFontContainer.classList.remove('hidden');
+                    } else {
+                        dom.customFontContainer.classList.add('hidden');
+                    }
+                    updateField('fontFamily', e.target.value);
+                });
+                dom.inputCustomFont.addEventListener('input', (e) => updateField('customFont', e.target.value));
+
+                // Colors Sync (Picker + Hex Inputs)
+                const bindColor = (picker, hexInput, key) => {
+                    picker.addEventListener('input', (e) => {
+                        hexInput.value = e.target.value;
+                        updateField(key, e.target.value);
+                    });
+                    hexInput.addEventListener('change', (e) => {
+                        if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+                            picker.value = e.target.value;
+                            updateField(key, e.target.value);
+                        }
+                    });
+                };
+
+                bindColor(dom.colorText, dom.colorTextHex, 'textColor');
+                bindColor(dom.colorGlow, dom.colorGlowHex, 'glowColor');
+                bindColor(dom.colorBg, dom.colorBgHex, 'bgColor');
+                bindColor(dom.colorProgress, dom.colorProgressHex, 'progressColor');
+
+                // Sliders
+                dom.rangeFontSize.addEventListener('input', (e) => {
+                    dom.valFontSize.textContent = `${e.target.value}px`;
+                    updateField('fontSize', parseInt(e.target.value, 10));
+                });
+                dom.rangeGlowBlur.addEventListener('input', (e) => {
+                    dom.valGlowBlur.textContent = `${e.target.value}px`;
+                    updateField('glowBlur', parseInt(e.target.value, 10));
+                });
+                dom.rangeBgOpacity.addEventListener('input', (e) => {
+                    dom.valBgOpacity.textContent = `${e.target.value}%`;
+                    updateField('bgOpacity', parseInt(e.target.value, 10));
+                });
+
+                // Copy OBS URL
+                dom.btnCopyObsUrl.addEventListener('click', () => {
+                    dom.obsUrlInput.select();
+                    document.execCommand('copy');
+                    showToast('URL OBS copiée dans le presse-papier !');
+                });
+
+                // Action Copy Buttons (Stream Deck Shortcuts)
+                document.querySelectorAll('.btn-copy-action').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const act = e.target.getAttribute('data-action');
+                        const url = `${window.location.origin}${window.location.pathname}?action=${act}`;
+                        
+                        // Copy via execCommand
+                        const tempInput = document.createElement('input');
+                        tempInput.value = url;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+
+                        // Signal sur le BroadcastChannel pour test direct
+                        broadcastState('action', { action: act });
+                        executeAction(act);
+
+                        showToast(`Commande ${act} déclenchée & URL copiée !`);
+                    });
+                });
+
+                // Export JSON
+                dom.btnExportJson.addEventListener('click', () => {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+                    const downloadAnchor = document.createElement('a');
+                    downloadAnchor.setAttribute("href", dataStr);
+                    downloadAnchor.setAttribute("download", `obs-timer-config.json`);
+                    document.body.appendChild(downloadAnchor);
+                    downloadAnchor.click();
+                    downloadAnchor.remove();
+                    showToast('Configuration exportée en JSON');
+                });
+
+                // Import JSON
+                dom.btnImportJson.addEventListener('click', () => dom.fileImport.click());
+                dom.fileImport.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const importedConfig = JSON.parse(event.target.result);
+                            config = { ...DEFAULT_SETTINGS, ...importedConfig };
+                            saveConfig();
+                            applyConfigToUI();
+                            calculateTotalSeconds();
+                            resetTimer();
+                            showToast('Configuration importée avec succès !');
+                        } catch(err) {
+                            showToast('Erreur lors de l\'importation du fichier JSON');
+                        }
+                    };
+                    reader.readAsText(file);
+                });
+
+                // Hotkeys Clavier Globaux
+                window.addEventListener('keydown', (e) => {
+                    // Eviter de déclencher les raccourcis si on retape dans un input
+                    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                        return;
+                    }
+
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        toggleTimer();
+                    } else if (e.code === 'KeyR') {
+                        e.preventDefault();
+                        resetTimer();
+                    } else if (e.code === 'KeyC') {
+                        e.preventDefault();
+                        dom.controlPanel.classList.toggle('translate-x-full');
+                    } else if (e.key === '+' || e.code === 'NumpadAdd') {
+                        e.preventDefault();
+                        adjustTime(60);
+                    } else if (e.key === '-' || e.code === 'NumpadSubtract') {
+                        e.preventDefault();
+                        adjustTime(-60);
+                    }
+                });
+            }
+
+            // Lancement au chargement complet
+            window.onload = init;
+        })();
+    </script>
+</body>
+</html>
